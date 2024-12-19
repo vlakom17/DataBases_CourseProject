@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Purchase Requests</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>My Purchase Requests</h1>
+        <div id="header-buttons">
+            <button onclick="window.location.href='/listings/'">Back to Listings</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="requests-container">
+            <!-- Список запросов на покупку будет загружен сюда -->
+        </div>
+    </main>
+
+    <footer>
+        <a href="/login/">Back to Login</a>
+    </footer>
+
+    <script>
+        // Функция для загрузки запросов на покупку пользователя
+        async function loadPurchaseRequests() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to view your purchase requests!");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/purchaserequests/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const requests = data.requests;
+
+                    const container = document.getElementById('requests-container');
+
+                    if (requests.length === 0) {
+                        container.innerHTML = '<p>No purchase requests found.</p>';
+                        return;
+                    }
+
+                    // Формируем список запросов
+                    container.innerHTML = '<h2>Your Purchase Requests</h2>';
+                    const list = document.createElement('ul');
+
+                    requests.forEach(request => {
+                        const item = document.createElement('li');
+                        const status = request.requeststatus || "Unknown";
+                        const date = new Date(request.requestdate).toLocaleString();
+
+                        // Добавляем ссылку для изменения статуса запроса
+                        item.innerHTML = `
+                            <p><strong>Listing ID:</strong> ${request.listingid}</p>
+                            <p><strong>Status:</strong> ${status}</p>
+                            <p><strong>Request Date:</strong> ${date}</p>
+                            <a href="/update-request/${request.requestid}/">Update Request Status</a>
+                        `;
+
+                        list.appendChild(item);
+                    });
+
+                    container.appendChild(list);
+                } else {
+                    const error = await response.json();
+                    alert(error.detail || "Failed to load purchase requests.");
+                }
+            } catch (error) {
+                console.error("Error loading purchase requests:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        }
+
+        // Загружаем запросы при загрузке страницы
+        window.onload = loadPurchaseRequests;
+    </script>
+</body>
+</html>

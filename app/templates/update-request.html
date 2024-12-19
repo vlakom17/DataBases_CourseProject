@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Purchase Request</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Update Purchase Request</h1>
+        <div id="header-buttons">
+            <button onclick="window.location.href='/purchase-requests/'">Back to Requests</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="update-container">
+            <!-- Информация о запросе и форма будут загружены сюда -->
+        </div>
+    </main>
+
+    <footer>
+        <a href="/login/">Back to Login</a>
+    </footer>
+
+    <script>
+        // Получение request_id из URL
+        const requestId = window.location.pathname.split('/').slice(-2)[0];
+
+        // Функция для загрузки информации о запросе
+        async function loadRequestDetails() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to update a request!");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/purchaserequests/${requestId}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const request = data.request;
+
+                    const container = document.getElementById('update-container');
+                    container.innerHTML = `
+                        <p><strong>Listing ID:</strong> ${request.listingid}</p>
+                        <p><strong>Current Status:</strong> ${request.requeststatus}</p>
+                        <label for="status">New Status:</label>
+                        <select id="status">
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                        <button onclick="updateStatus()">Update Status</button>
+                    `;
+                } else {
+                    const error = await response.json();
+                    alert(error.detail || "Failed to load purchase request.");
+                }
+            } catch (error) {
+                console.error("Error loading request details:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        }
+
+        // Функция для обновления статуса
+        async function updateStatus() {
+            const token = localStorage.getItem("auth_token");
+            const newStatus = document.getElementById("status").value;
+
+            try {
+                const response = await fetch(`/purchaserequests/${requestId}/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ requeststatus: newStatus })
+                });
+
+                if (response.ok) {
+                    alert("Status updated successfully!");
+                    window.location.href = '/purchase-requests/';
+                } else {
+                    const error = await response.json();
+                    alert(error.detail || "Failed to update status.");
+                }
+            } catch (error) {
+                console.error("Error updating status:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        }
+
+        // Загружаем детали запроса при загрузке страницы
+        window.onload = loadRequestDetails;
+    </script>
+</body>
+</html>

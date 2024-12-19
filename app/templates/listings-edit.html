@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Listing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Edit Listing</h1>
+        <button onclick="window.location.href='/listings/'">Back to Listings</button>
+    </header>
+
+    <main>
+        <form id="edit-listing-form">
+            <label for="address">Address:</label>
+            <input type="text" id="address" name="address" placeholder="Enter address">
+
+            <label for="area">Area:</label>
+            <input type="number" id="area" name="area" step="0.01" placeholder="Enter area in m²">
+
+            <label for="price">Price:</label>
+            <input type="number" id="price" name="price" placeholder="Enter price">
+
+            <label for="status">Status:</label>
+            <select id="status" name="status">
+                <option value="Available">Available</option>
+                <option value="Sold">Sold</option>
+                <option value="Removed">Removed</option>
+            </select>
+
+            <label for="typeid">Type:</label>
+            <select id="typeid" name="typeid">
+                <option value="1">Flat</option>
+                <option value="2">House</option>
+                <option value="3">Apartment</option>
+                <option value="4">Cottage</option>
+                <option value="5">Retail Space</option>
+            </select>
+
+            <button type="button" onclick="updateListing()">Save Changes</button>
+        </form>
+
+        <div id="response-message"></div>
+    </main>
+
+    <script>
+        // Получаем ID объявления из URL
+        const pathname = window.location.pathname;
+        const listingId = pathname.split('/')[2]; // Предполагаем, что URL выглядит как /listings-edit/<listing_id>/
+
+        // Загружаем текущие данные объявления для редактирования
+        async function loadListingData() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to edit this listing.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api-listings/${listingId}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('address').value = data.listing.address || "";
+                    document.getElementById('area').value = data.listing.area || "";
+                    document.getElementById('price').value = data.listing.price || "";
+                    document.getElementById('status').value = data.listing.status || "Available";
+                    document.getElementById('typeid').value = data.listing.typeid || "1";
+                } else {
+                    throw new Error("Failed to load listing details.");
+                }
+            } catch (error) {
+                console.error("Error loading listing data:", error);
+                alert("An error occurred while loading the listing data.");
+            }
+        }
+
+        // Отправка изменений на сервер
+        async function updateListing() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to update this listing.");
+                return;
+            }
+
+            const formData = {
+                address: document.getElementById('address').value,
+                area: parseFloat(document.getElementById('area').value) || null,
+                price: parseFloat(document.getElementById('price').value) || null,
+                status: document.getElementById('status').value,
+                typeid: parseInt(document.getElementById('typeid').value) || null
+            };
+
+            try {
+                const response = await fetch(`/api-listings/${listingId}/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('response-message').innerText = result.detail;
+                    alert("Listing updated successfully.");
+                    window.location.href = `/listings/`; // Перенаправление на список объявлений
+                } else {
+                    alert(result.error || "Failed to update listing.");
+                }
+            } catch (error) {
+                console.error("Error updating listing:", error);
+                alert("An error occurred while updating the listing.");
+            }
+        }
+
+        // Загружаем данные объявления при загрузке страницы
+        document.addEventListener("DOMContentLoaded", loadListingData);
+    </script>
+</body>
+</html>

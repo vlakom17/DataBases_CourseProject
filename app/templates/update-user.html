@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update User</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Update User</h1>
+        <div id="header-buttons">
+            <button id="back-to-listings" onclick="window.location.href='/listings/'">Back to Listings</button>
+        </div>
+    </header>
+    <main>
+        <section>
+            <h2>Update Your Name</h2>
+            <form id="update-name-form">
+                <label for="new-name">New Name:</label>
+                <input type="text" id="new-name" name="new-name" placeholder="Enter your new name" required>
+                <button type="submit">Update Name</button>
+            </form>
+        </section>
+        <hr>
+        <section>
+            <h2>Update Role</h2>
+            <form id="update-role-form">
+                <label for="new-role">New Role:</label>
+                <select id="new-role" name="new-role" required>
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+                
+                <label for="secret-key">Secret Key:</label>
+                <input type="password" id="secret-key" name="secret-key" placeholder="Enter Secret Key" required>
+                
+                <button type="submit">Update Role</button>
+            </form>
+        </section>
+    </main>
+    <footer>
+        <a href="/logout/">Logout</a>
+    </footer>
+
+    <script>
+        // Handle name update form
+        document.getElementById('update-name-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const newName = document.getElementById('new-name').value;
+            const token = localStorage.getItem("auth_token");
+
+            try {
+                const response = await fetch('/users/update-name/', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name: newName })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`Name updated successfully to: ${data.new_name}`);
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.detail || error.message}`);
+                }
+            } catch (error) {
+                console.error("Error updating name:", error);
+                alert("An unexpected error occurred while updating the name.");
+            }
+        });
+
+        document.getElementById('update-role-form').addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const newRole = document.getElementById('new-role').value;
+    const secretKey = document.getElementById('secret-key').value;
+    const token = localStorage.getItem("auth_token");
+
+    try {
+        const response = await fetch('/users/update-role/', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ new_role: newRole, secret_key: secretKey })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            alert(`Role updated successfully: ${data.detail}`);
+        } else {
+            const error = await response.json();
+            alert(`Error: ${error.detail || error.message}`);
+        }
+    } catch (error) {
+        console.error("Error updating role:", error);
+        alert("An unexpected error occurred while updating the role.");
+    }
+});
+
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Listings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Property Listings</h1>
+        <div id="header-buttons">
+            <button id="create-listing" onclick="window.location.href='/listings-create/'">Create Listing</button>
+            <button id="update-user">Update User</button>
+            <button id="logout" onclick="logout()">Logout</button>
+        </div>
+    </header>
+    <main>
+        <div id="listing-container">
+            <!-- Объявления будут добавляться сюда динамически через JavaScript -->
+        </div>
+    </main>
+    <footer>
+        <a href="/login/">Back to Login</a>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        // Асинхронная функция для выполнения запроса
+        async function setUpdateUserButton() {
+            const token = localStorage.getItem("auth_token"); // Получаем токен
+    
+            if (!token) {
+                alert("User not authenticated!");
+                window.location.href = "/login/";
+                return;
+            }
+    
+            try {
+                const response = await fetch('/users/me/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+    
+                if (response.ok) {
+                    const userData = await response.json();
+                    const userId = userData.userid; // ID текущего пользователя
+                    const updateUserButton = document.getElementById('update-user');
+                    updateUserButton.onclick = () => {
+                        window.location.href = `/update-user/${userId}`;
+                    };
+                } else {
+                    alert("Failed to fetch user data. Please log in again.");
+                    window.location.href = "/login/";
+                }
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+                alert("An error occurred. Please try again later.");
+                window.location.href = "/login/";
+            }
+        }
+    
+        // Вызов функции после загрузки страницы
+        document.addEventListener("DOMContentLoaded", setUpdateUserButton);
+    </script>
+    
+</body>
+</html>

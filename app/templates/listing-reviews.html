@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Listing Reviews</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Listing Reviews</h1>
+        <div id="header-buttons">
+            <button id="back-to-listing" onclick="window.location.href='/listing-management/' + listingId;">Back to Listing</button>
+        </div>
+    </header>
+
+    <main>
+        <div id="reviews-container">
+            <!-- Отзывы будут загружены сюда -->
+        </div>
+    </main>
+
+    <footer>
+        <a href="/login/">Back to Login</a>
+    </footer>
+
+    <script>
+        const listingId = window.location.pathname.split('/')[2];  // Извлекаем ID объявления из URL
+
+        async function loadReviews() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to view reviews!");
+                window.location.href = "/login/";
+                return;
+            }
+
+            try {
+                const response = await fetch(`/reviews/?listingid=${listingId}`, {  // Добавляем listingId в параметры
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const reviews = await response.json();
+                    renderReviews(reviews);
+                } else {
+                    alert("Failed to load reviews.");
+                    console.error("Error:", await response.text());
+                }
+            } catch (error) {
+                console.error("Error loading reviews:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        }
+
+        function renderReviews(reviews) {
+            const reviewsContainer = document.getElementById('reviews-container');
+            reviewsContainer.innerHTML = '';
+
+            if (reviews.length === 0) {
+                reviewsContainer.innerHTML = '<p>No reviews found for this listing.</p>';
+                return;
+            }
+
+            reviews.forEach(review => {
+                const reviewElement = document.createElement('div');
+                reviewElement.classList.add('review');
+
+                const reviewHtml = `
+                    <p><strong>Rating:</strong> ${review.rating} / 10</p>
+                    <p><strong>Review:</strong> ${review.reviewtext}</p>
+                    <p><strong>Reviewed by User ID:</strong> ${review.userid}</p>
+                    <p><strong>Date:</strong> ${review.reviewdate}</p>
+                    <button onclick="redirectToEditReview(${review.reviewid})">Edit</button>
+                    <button onclick="deleteReview(${review.reviewid})">Delete</button>
+                `;
+                reviewElement.innerHTML = reviewHtml;
+                reviewsContainer.appendChild(reviewElement);
+            });
+        }
+
+        function redirectToEditReview(reviewId) {
+            localStorage.setItem("current_listing_id", listingId);
+            window.location.href = `/edit-review/${reviewId}/`; // Перенаправляем на страницу редактирования
+            
+        }
+
+        async function deleteReview(reviewId) {
+            const confirmDelete = confirm("Are you sure you want to delete this review?");
+            if (!confirmDelete) return;
+
+            const token = localStorage.getItem("auth_token");
+
+            try {
+                const response = await fetch(`/reviews/${reviewId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    alert("Review deleted successfully.");
+                    loadReviews();  // Reload reviews
+                } else {
+                    alert("Failed to delete review.");
+                    console.error("Error:", await response.text());
+                }
+            } catch (error) {
+                console.error("Error deleting review:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        }
+
+        // Загружаем все отзывы при загрузке страницы
+        window.onload = loadReviews;
+    </script>
+</body>
+</html>

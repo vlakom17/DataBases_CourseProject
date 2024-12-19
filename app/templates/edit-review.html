@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Review</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Edit Review</h1>
+        <div id="header-buttons">
+            <button id="back-to-reviews" onclick="window.location.href='/listing-reviews/' + listingId;">Back to Reviews</button>
+        </div>
+    </header>
+
+    <main>
+        <form id="edit-review-form">
+            <label for="rating">Rating (1-10):</label>
+            <input type="number" id="rating" name="rating" min="1" max="10" required>
+
+            <label for="reviewtext">Review Text:</label>
+            <textarea id="reviewtext" name="reviewtext" rows="4" required></textarea>
+
+            <button type="submit">Update Review</button>
+        </form>
+    </main>
+
+    <footer>
+        <a href="/login/">Back to Login</a>
+    </footer>
+
+    <script>
+        const reviewId = window.location.pathname.split('/')[2];  // Извлекаем ID отзыва из URL
+        const listingId = localStorage.getItem("current_listing_id"); // Сохраняем ID объявления из предыдущей страницы
+
+        async function loadReview() {
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to edit a review!");
+                window.location.href = "/login/";
+                return;
+            }
+
+            try {
+                const response = await fetch(`/reviews/${reviewId}/`, {  // Загрузка данных отзыва
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const review = await response.json();
+                    document.getElementById('rating').value = review.rating;
+                    document.getElementById('reviewtext').value = review.reviewtext;
+                } else {
+                    alert("Failed to load review.");
+                    console.error("Error:", await response.text());
+                }
+            } catch (error) {
+                console.error("Error loading review:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        }
+
+        document.getElementById('edit-review-form').addEventListener('submit', async function(event) {
+            event.preventDefault();  // Предотвращаем отправку формы
+
+            const token = localStorage.getItem("auth_token");
+            if (!token) {
+                alert("You must be logged in to update a review!");
+                window.location.href = "/login/";
+                return;
+            }
+
+            const rating = document.getElementById('rating').value;
+            const reviewText = document.getElementById('reviewtext').value;
+
+            try {
+                const response = await fetch(`/reviews/${reviewId}/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ rating, reviewtext: reviewText })
+                });
+
+                if (response.ok) {
+                    alert("Review updated successfully.");
+                    
+                    window.location.href = `/listing-reviews/${listingId}/`;  // Возвращаемся к списку отзывов
+                } else {
+                    alert("Failed to update review.");
+                    console.error("Error:", await response.text());
+                }
+            } catch (error) {
+                console.error("Error updating review:", error);
+                alert("An error occurred. Please try again later.");
+            }
+        });
+
+        // Загружаем данные отзыва при загрузке страницы
+        window.onload = loadReview;
+    </script>
+</body>
+</html>

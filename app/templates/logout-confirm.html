@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Logout</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Confirm Logout</h1>
+    </header>
+    <main>
+        <p>Are you sure you want to log out?</p>
+        <button id="confirm-logout" onclick="confirmLogout()">Yes, Logout</button>
+        <button id="cancel-logout" onclick="cancelLogout()">Cancel</button>
+    </main>
+    <footer>
+        <a href="/listings/">Return to main</a>
+    </footer>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
