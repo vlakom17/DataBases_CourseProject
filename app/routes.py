@@ -32,8 +32,8 @@ def log_action(
         actiontimestamp=datetime.utcnow(),
     )
 
-    db.add(log_entry)  # Добавляем запись в сессию
-    db.commit()  # Подтверждаем изменения в базе данных
+    db.add(log_entry)
+    db.commit()
 
 def is_admin_user(current_user):
     if not current_user or current_user.usertype != "admin":
@@ -51,13 +51,21 @@ def get_current_user_from_request(request, db: Session):
     try:
         payload = jwt.decode(token, Config.SECRET_KEY, algorithms=["HS256"])
         email = payload.get("sub")
-        if not email:
+        user_id = payload.get("user_id")
+
+        if not email or not user_id:
             return None
+
+        from .redis_store import get_auth_token
+        redis_token = get_auth_token(user_id)
+        if redis_token != token:
+            return None  # Токен отозван
 
         user = db.query(users).filter(users.email == email).first()
         return user
     except JWTError:
         return None
+
     
 def object_as_dict(obj):
     
@@ -118,6 +126,9 @@ def edit_review(review_id):
 def update_user(user_id):
     return render_template("update-user.html", user_id=user_id)
 
+from .redis_store import save_auth_token
+from .redis_store import delete_auth_token
+
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route("/api-register/", methods=["POST"])
@@ -130,28 +141,24 @@ def register_user():
     email = data.get("email")
     password = data.get("password")
 
-    # Проверяем, существует ли пользователь
     existing_user = db.session.query(users).filter(users.email == email).first()
     if existing_user:
         return jsonify({"message": "email already registered"}), 400
 
-    # Хэшируем пароль
     hashed_password = hash_password(password)
     new_user = users(
         name=name,
         email=email,
         passwordhash=hashed_password,
-        usertype='user'  # Устанавливаем роль по умолчанию
+        usertype='user'
     )
 
     db.session.add(new_user)
     db.session.commit()
     db.session.refresh(new_user)
 
-    # Генерируем токен
     access_token = generate_token(data={"sub": new_user.email}, secret_key="YOUR_SECRET_KEY")
 
-    # Логирование регистрации пользователя
     log_action(
         db=db.session,
         action_type="register",
@@ -170,15 +177,13 @@ def login_user():
     email = data.get("email")
     password = data.get("password")
 
-    # Проверяем, существует ли пользователь
     user = db.session.query(users).filter(users.email == email).first()
     if not user or not verify_password(user.passwordhash, password):
         return jsonify({"message": "Invalid email or password"}), 401
 
-    # Генерируем токен
     access_token = generate_token(data={"sub": user.email, "user_id": user.userid}, secret_key=Config.SECRET_KEY)
-    
-    # Логирование входа пользователя
+    save_auth_token(user.userid, access_token)
+
     log_action(
         db=db.session,
         action_type="login",
@@ -208,6 +213,8 @@ def logout_user():
         user_id=current_user.userid
     )
     token = "xxx"
+    
+    delete_auth_token(current_user.userid)
     return jsonify({"detail": "Successfully logged out"}), 200
 
 usr_bp = Blueprint('usr', __name__)
@@ -219,11 +226,9 @@ def update_user_role():
     secret_key = data.get("secret_key")
     db: Session = get_db()
 
-    # Проверка наличия SECRET_KEY и его валидности
     if secret_key != Config.SECRET_KEY:
         return jsonify({"message": "Invalid SECRET_KEY"}), 403
 
-    # Получаем текущего пользователя из токена
     current_user = get_current_user_from_request(request, db)
     if not current_user:
         return jsonify({"message": "User not found"}), 404
@@ -250,11 +255,9 @@ def update_user_role():
             )
             db.add(new_admin_entry)
 
-    # Обновляем роль в таблице users
     current_user.usertype = new_role
     db.commit()
 
-    # Логирование изменения роли пользователя
     log_action(
         db=db,
         action_type="update_role",
@@ -269,13 +272,11 @@ def get_current_user_info():
 
     db: Session = get_db()
     
-    # Получаем текущего пользователя из токена
     current_user = get_current_user_from_request(request, db)
     
     if not current_user:
         return jsonify({"message": "User not found"}), 404
     
-    # Формируем ответ с информацией о пользователе
     user_data = {
         "userid": current_user.userid,
         "name": current_user.name,
@@ -285,29 +286,25 @@ def get_current_user_info():
     
     return jsonify(user_data), 200
 
-# Определение модели для данных запроса
 class UpdateUsername(BaseModel):
     name: str
 
 @usr_bp.route("/users/update-name/", methods=["PUT"])
 def update_user_name():
-    # Получаем данные из запроса
-    update_data = UpdateUsername(**request.json)  # Предполагаем, что тело запроса - это JSON
+
+    update_data = UpdateUsername(**request.json)
 
     db: Session = get_db()
 
-    # Получаем текущего пользователя
     current_user = get_current_user_from_request(request, db)
 
     # Сохраняем старое имя для логирования
     old_name = current_user.name
     
-    # Обновляем имя пользователя
     current_user.name = update_data.name
     db.commit()
     db.refresh(current_user)
     
-    # Логирование изменения имени
     log_action(
         db=db,
         action_type="update",
@@ -318,10 +315,12 @@ def update_user_name():
     return jsonify({"detail": "User name updated successfully", "new_name": current_user.name}), 200
 
 
+from .redis_store import rdb
+import json
+from .redis_store import set_listing_status
+from .redis_store import delete_listing_status
 
-# Создаем Blueprint для маршрутов listings
 list_bp = Blueprint('list', __name__)
-
 
 class listingCreate(BaseModel):
     typeid: int
@@ -332,10 +331,9 @@ class listingCreate(BaseModel):
 
 @list_bp.route("/create-listings/", methods=["POST"])
 def create_listing():
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    # Валидация данных с помощью pydantic
     listing_data = listingCreate(**request.json)
 
     new_listing = listing(
@@ -350,15 +348,16 @@ def create_listing():
     db.add(new_listing)
     db.commit()
     db.refresh(new_listing)
+    
+    set_listing_status(new_listing.listingid, new_listing.status)
 
-    # Логируем создание объявления
     log_action(
         db=db,
         action_type="create",
         action_description=f"User {current_user.userid} created a listing with ID {new_listing.listingid}",
         user_id=current_user.userid,
     )
-
+    rdb.delete("all_listings")
     return jsonify(listing_data.dict()), 201
 
 @list_bp.route("/all-listings/", methods=["GET"])
@@ -367,21 +366,25 @@ def get_listings():
     
     if not current_user:
         return jsonify({"error": "User not authenticated"}), 401
-
+    
+    # Сначала пробуем взять из Redis
+    cached_data = rdb.get("all_listings")
+    if cached_data:
+        return jsonify(json.loads(cached_data)), 200
     db_session: Session = db.session
 
     try:
-        # Получение всех объектов из базы данных
         listings = db_session.query(listing).all()
+        listings_data = [object_as_dict(l) for l in listings]
 
-        # Преобразуем данные в формат JSON
-        listings_data = [object_as_dict(listing) for listing in listings]
-
-        return jsonify({
+        response = {
             "listings": listings_data,
-            "total_count": len(listings_data)  # Общее количество объявлений
-        }), 200
+            "total_count": len(listings_data)
+        }
 
+        rdb.setex("all_listings", 60, json.dumps(response))
+        return jsonify(response), 200
+    
     except Exception as e:
         return jsonify({"error": "An internal error occurred. Please try again later."}), 500
 
@@ -396,13 +399,11 @@ def get_listing_by_id(listing_id):
     db_session: Session = db.session
 
     try:
-        # Получение объявления по его ID
         listing_item = db_session.query(listing).filter(listing.listingid == listing_id).first()
 
         if not listing_item:
             return jsonify({"error": "Listing not found"}), 404
 
-        # Преобразуем данные в формат JSON
         listing_data = object_as_dict(listing_item)
 
         return jsonify({
@@ -415,11 +416,11 @@ def get_listing_by_id(listing_id):
 
 @list_bp.route("/api-listings/<int:listing_id>/", methods=["DELETE"])
 def delete_listing(listing_id):
-    db: Session = get_db()  # Получаем сессию базы данных
+    db: Session = get_db()
     current_user = get_current_user_from_request(request, db)
 
     try:
-        admin = is_admin_user(current_user)  # Проверяем, является ли текущий пользователь администратором
+        admin = is_admin_user(current_user)
     except PermissionError as e:
         return jsonify({"message": str(e)}), 403
 
@@ -430,13 +431,15 @@ def delete_listing(listing_id):
     db.delete(listing_item)
     db.commit()
 
+    delete_listing_status(listing_id)
+
     log_action(
         db=db,
         action_type="delete",
         action_description=f"User {admin.userid} deleted a listing with ID {listing_id}",
         user_id=admin.userid,
     )
-
+    rdb.delete("all_listings")
     return jsonify({"detail": "Listing deleted"}), 200
 
 
@@ -450,19 +453,16 @@ class Updatelisting(BaseModel):
 
 @list_bp.route("/api-listings/<int:listing_id>/", methods=["PUT"])
 def update_listing(listing_id):
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    # Получаем данные из запроса
     request_data = request.json
 
-    # Попытка валидировать входные данные
     try:
         update_data = Updatelisting(**request_data)
     except ValidationError as e:
         return jsonify({"error": e.errors()}), 400
 
-    # Поиск записи в базе данных
     listing_item = db.query(listing).filter(listing.listingid == listing_id, listing.userid == current_user.userid).first()
     
     if not listing_item:
@@ -475,16 +475,17 @@ def update_listing(listing_id):
 
     db.commit()
     db.refresh(listing_item)
+    if "status" in update_fields:
+        set_listing_status(listing_id, update_fields["status"])
 
-    # Логирование действия
     log_action(
         db=db,
         action_type="update",
         action_description=f"User {current_user.userid} updated a listing with ID {listing_id}",
         user_id=current_user.userid,
     )
+    rdb.delete("all_listings")
 
-    # Возврат обновлённого объекта
     return jsonify({
         "detail": "listing updated successfully",
         "listing": {
@@ -497,9 +498,8 @@ def update_listing(listing_id):
         }
     }), 200
 
+from .redis_store import set_purchase_request_status, publish_purchase_event
 
-
-# Создаем Blueprint для маршрутов purchase requests
 pr_bp = Blueprint('purchase_requests', __name__)
 
 class purchaserequestCreate(BaseModel):
@@ -508,22 +508,19 @@ class purchaserequestCreate(BaseModel):
 
 @pr_bp.route("/purchaserequests/", methods=["POST"])
 def create_purchase_request():
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    # Получаем данные для создания запроса на покупку из запроса
     request_data = purchaserequestCreate(**request.json)
 
-    # Проверяем, что объявление существует
     listing_item = db.query(listing).filter(listing.listingid == request_data.listingid).first()
     if not listing_item:
         return jsonify({"detail": "listing not found"}), 404
     
-    # Проверяем, что пользователь не является владельцем объявления
+
     if listing_item.userid == current_user.userid:
         return jsonify({"detail": "You cannot request to purchase your own listing"}), 400
     
-    # Создаем запрос на покупку
     new_request = purchaserequest(
         listingid=request_data.listingid,
         userid=current_user.userid,
@@ -533,8 +530,8 @@ def create_purchase_request():
     db.add(new_request)
     db.commit()
     db.refresh(new_request)
+    set_purchase_request_status(new_request.requestid, new_request.requeststatus)
 
-    # Логируем создание запроса на покупку
     log_action(
         db=db,
         action_type="create",
@@ -546,17 +543,14 @@ def create_purchase_request():
 
 @pr_bp.route("/purchaserequests/<int:request_id>/", methods=["GET"])
 def get_purchase_request(request_id: int):
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    # Ищем запрос на покупку по его ID и проверяем, что он принадлежит текущему пользователю
     request_item = db.query(purchaserequest).filter(purchaserequest.requestid == request_id, purchaserequest.userid == current_user.userid).first()
 
-    # Если запрос не найден
     if not request_item:
         return jsonify({"detail": "Purchase request not found for this user"}), 404
 
-    # Логируем доступ пользователя к его запросу
     log_action(
         db=db,
         action_type="read",
@@ -564,26 +558,21 @@ def get_purchase_request(request_id: int):
         user_id=current_user.userid
     )
 
-    # Преобразуем объект запроса в словарь
     request_dict = object_as_dict(request_item)
 
-    # Возвращаем запрос в формате JSON
     return jsonify({"request": request_dict}), 200
 
 
 @pr_bp.route("/purchaserequests/", methods=["GET"])
 def get_user_purchase_requests():
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    # Получаем все запросы текущего пользователя
     requests = db.query(purchaserequest).filter(purchaserequest.userid == current_user.userid).all()
 
-    # Если у пользователя нет запросов
     if not requests:
         return jsonify({"detail": "No purchase requests found for this user"}), 404
 
-    # Логируем доступ пользователя к его запросам
     log_action(
         db=db,
         action_type="read",
@@ -591,10 +580,8 @@ def get_user_purchase_requests():
         user_id=current_user.userid
     )
 
-    # Преобразуем каждый объект в словарь
     requests_dict = [object_as_dict(request) for request in requests]
 
-    # Возвращаем список запросов в формате JSON
     return jsonify({"requests": requests_dict}), 200
 
 
@@ -604,34 +591,29 @@ class purchaserequestUpdate(BaseModel):
 
 @pr_bp.route("/purchaserequests/<int:request_id>/", methods=["PUT"])
 def update_purchase_request_status(request_id: int):
-    db: Session = get_db()  # Получаем сессию базы данных
+    db: Session = get_db()
 
-    # Проверяем, что запрос на покупку существует
     purrequest = db.query(purchaserequest).filter(purchaserequest.requestid == request_id).first()
     if not purrequest:
-        return jsonify({"detail": "Purchase request not found"}), 404  # Возвращаем 404 Not Found
+        return jsonify({"detail": "Purchase request not found"}), 404
 
-    # Получаем данные обновления статуса из запроса
     update_data = purchaserequestUpdate(**request.json)
 
-    # Проверяем корректность статуса
     if update_data.requeststatus not in ["Pending", "Approved", "Rejected"]:
-        return jsonify({"detail": "Invalid request status"}), 400  # Возвращаем 400 Bad Request
+        return jsonify({"detail": "Invalid request status"}), 400
     
-    # Получаем текущего пользователя
     current_user = get_current_user_from_request(request, db)
 
-    # Проверяем, что текущий пользователь — это тот, кто подал запрос на покупку
     if purrequest.userid != current_user.userid:
-        return jsonify({"detail": "You can only update your own purchase request"}), 403  # Возвращаем 403 Forbidden
+        return jsonify({"detail": "You can only update your own purchase request"}), 403
 
-    # Обновляем статус
     old_status = purrequest.requeststatus
     purrequest.requeststatus = update_data.requeststatus
     db.commit()
     db.refresh(purrequest)
+    set_purchase_request_status(request_id, update_data.requeststatus)
+    publish_purchase_event(f"status_changed:{request_id}")
 
-    # Логируем обновление статуса
     log_action(
         db=db,
         action_type="update",
@@ -639,10 +621,9 @@ def update_purchase_request_status(request_id: int):
         user_id=current_user.userid
     )
 
-    return jsonify({"detail": "Purchase request status updated", "request": object_as_dict(purrequest)}), 200  # Возвращаем 200 OK
+    return jsonify({"detail": "Purchase request status updated", "request": object_as_dict(purrequest)}), 200
 
 
-# Создаем Blueprint
 rvi_bp = Blueprint('reviews', __name__)
 
 class reviewBase(BaseModel):
@@ -661,21 +642,17 @@ def create_review():
     data = request.get_json()
 
     try:
-        # Валидация входных данных с помощью Pydantic
         validated_data = reviewBase(**data)
     except ValueError as e:
-        return jsonify({"detail": str(e)}), 400  # 400 Bad Request
-
+        return jsonify({"detail": str(e)}), 400
     db: Session = get_db()
-    current_user = get_current_user_from_request(request, db)  # Получение текущего пользователя
+    current_user = get_current_user_from_request(request, db)
 
-    # Проверяем, что объявление существует
     listing_item = db.query(listing).filter(listing.listingid == validated_data.listingid).first()
     if not listing_item:
-        return jsonify({"detail": "Listing not found"}), 404  # 404 Not Found
+        return jsonify({"detail": "Listing not found"}), 404
 
-    # Создаем новый отзыв
-    new_review = review(  # Используйте имя вашей SQLAlchemy модели
+    new_review = review(
         userid=current_user.userid,
         listingid=validated_data.listingid,
         rating=validated_data.rating,
@@ -689,9 +666,8 @@ def create_review():
         db.refresh(new_review)
     except IntegrityError:
         db.rollback()
-        return jsonify({"detail": "Error creating review"}), 400  # 400 Bad Request
+        return jsonify({"detail": "Error creating review"}), 400
 
-    # Логируем действие
     log_action(
         db=db,
         action_type="create",
@@ -699,7 +675,6 @@ def create_review():
         user_id=current_user.userid
     )
 
-    # Создаем объект ответа
     response_data = reviewResponse(
         reviewid=new_review.reviewid,
         userid=new_review.userid,
@@ -709,12 +684,11 @@ def create_review():
         reviewdate=new_review.reviewdate.isoformat()
     )
 
-    return jsonify(response_data.dict()), 201  # 201 Created
-
+    return jsonify(response_data.dict()), 201
 
 @rvi_bp.route("/reviews/", methods=["GET"])
 def get_reviews():
-    listing_id = request.args.get('listingid', type=int)  # Получаем параметр listingid из запроса
+    listing_id = request.args.get('listingid', type=int)
     db: Session = get_db()
 
     if listing_id is None:
@@ -722,7 +696,6 @@ def get_reviews():
 
     reviews = db.query(review).filter(review.listingid == listing_id).all()
 
-    # Формируем данные для ответа
     response_data = [
         {
             "reviewid": review.reviewid,
@@ -740,14 +713,13 @@ def get_reviews():
 
 @rvi_bp.route("/reviews/<int:review_id>/", methods=["GET"])
 def get_review(review_id):
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
     review_item = db.query(review).filter(review.reviewid == review_id).first()
     if not review_item:
         abort(404, description="Review not found")
 
-    # Логирование доступа к отзыву
     log_action(
         db=db,
         action_type="read",
@@ -755,7 +727,6 @@ def get_review(review_id):
         user_id=current_user.userid
     )
 
-    # Проверяем, что поле reviewdate является объектом datetime
     review_date = (
         review_item.reviewdate.isoformat()
         if isinstance(review_item.reviewdate, datetime)
@@ -768,8 +739,8 @@ def get_review(review_id):
         "listingid": review_item.listingid,
         "rating": review_item.rating,
         "reviewtext": review_item.reviewtext,
-        "reviewdate": review_date  # Форматированное значение
-    }), 200  # 200 OK
+        "reviewdate": review_date
+    }), 200
 
 class reviewUpdate(BaseModel):
     rating: Optional[int] = None
@@ -777,12 +748,11 @@ class reviewUpdate(BaseModel):
 
 @rvi_bp.route("/reviews/<int:review_id>/", methods=["PUT"])
 def update_review(review_id):
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    review_data = request.get_json()  # Получаем данные отзыва из запроса
+    review_data = request.get_json()
 
-    # Найти отзыв, который нужно обновить
     review_item = db.query(review).filter(
         review.reviewid == review_id, 
         review.userid == current_user.userid
@@ -791,7 +761,6 @@ def update_review(review_id):
     if not review_item:
         abort(404, description="Review not found or not authorized to update")
 
-    # Обновление полей отзыва
     if 'rating' in review_data and review_data['rating'] is not None:
         review_item.rating = review_data['rating']
     if 'reviewtext' in review_data and review_data['reviewtext'] is not None:
@@ -800,7 +769,6 @@ def update_review(review_id):
     db.commit()
     db.refresh(review_item)
 
-    # Логирование действия обновления
     log_action(
         db=db,
         action_type="update",
@@ -808,39 +776,34 @@ def update_review(review_id):
         user_id=current_user.userid
     )
 
-    # Проверка формата даты
     review_date = (
         review_item.reviewdate.isoformat()
         if isinstance(review_item.reviewdate, datetime)
         else review_item.reviewdate
     )
 
-    # Формирование ответа
     return jsonify({
         "reviewid": review_item.reviewid,
         "userid": review_item.userid,
         "listing_id": review_item.listingid,
         "rating": review_item.rating,
         "reviewtext": review_item.reviewtext,
-        "reviewdate": review_date  # Убедимся, что корректный формат даты
-    }), 200  # 200 OK
+        "reviewdate": review_date
+    }), 200
 
 @rvi_bp.route("/reviews/<int:review_id>/", methods=["DELETE"])
 def delete_review(review_id):
-    db: Session = get_db()  # Получаем сессию базы данных
-    current_user = get_current_user_from_request(request, db)  # Получаем текущего пользователя
+    db: Session = get_db()
+    current_user = get_current_user_from_request(request, db)
 
-    # Поиск отзыва для текущего пользователя
     review_item = db.query(review).filter(review.reviewid == review_id, review.userid == current_user.userid).first()
     
     if not review_item:
         abort(404, description="review not found or not authorized to delete")
 
-    # Удаление отзыва из базы данных
     db.delete(review_item)
     db.commit()
 
-    # Логирование действия
     log_action(
         db=db,
         action_type="delete",
@@ -848,5 +811,5 @@ def delete_review(review_id):
         user_id=current_user.userid
     )
 
-    return jsonify({"detail": "review deleted"}), 200  # Код ответа 200 OK
+    return jsonify({"detail": "review deleted"}), 200
 

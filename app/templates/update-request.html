@@ -16,7 +16,7 @@
 
     <main>
         <div id="update-container">
-            <!-- Информация о запросе и форма будут загружены сюда -->
+
         </div>
     </main>
 
@@ -25,10 +25,8 @@
     </footer>
 
     <script>
-        // Получение request_id из URL
         const requestId = window.location.pathname.split('/').slice(-2)[0];
 
-        // Функция для загрузки информации о запросе
         async function loadRequestDetails() {
             const token = localStorage.getItem("auth_token");
             if (!token) {
@@ -70,7 +68,6 @@
             }
         }
 
-        // Функция для обновления статуса
         async function updateStatus() {
             const token = localStorage.getItem("auth_token");
             const newStatus = document.getElementById("status").value;
@@ -98,7 +95,6 @@
             }
         }
 
-        // Загружаем детали запроса при загрузке страницы
         window.onload = loadRequestDetails;
     </script>
 </body>

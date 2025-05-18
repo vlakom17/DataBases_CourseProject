@@ -16,7 +16,7 @@
 
     <main>
         <div id="requests-container">
-            <!-- Список запросов на покупку будет загружен сюда -->
+
         </div>
     </main>
 
@@ -25,7 +25,7 @@
     </footer>
 
     <script>
-        // Функция для загрузки запросов на покупку пользователя
+
         async function loadPurchaseRequests() {
             const token = localStorage.getItem("auth_token");
             if (!token) {
@@ -52,7 +52,6 @@
                         return;
                     }
 
-                    // Формируем список запросов
                     container.innerHTML = '<h2>Your Purchase Requests</h2>';
                     const list = document.createElement('ul');
 
@@ -61,7 +60,6 @@
                         const status = request.requeststatus || "Unknown";
                         const date = new Date(request.requestdate).toLocaleString();
 
-                        // Добавляем ссылку для изменения статуса запроса
                         item.innerHTML = `
                             <p><strong>Listing ID:</strong> ${request.listingid}</p>
                             <p><strong>Status:</strong> ${status}</p>
@@ -83,7 +81,6 @@
             }
         }
 
-        // Загружаем запросы при загрузке страницы
         window.onload = loadPurchaseRequests;
     </script>
 </body>

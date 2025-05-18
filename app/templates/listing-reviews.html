@@ -16,7 +16,6 @@
 
     <main>
         <div id="reviews-container">
-            <!-- Отзывы будут загружены сюда -->
         </div>
     </main>
 
@@ -25,7 +24,7 @@
     </footer>
 
     <script>
-        const listingId = window.location.pathname.split('/')[2];  // Извлекаем ID объявления из URL
+        const listingId = window.location.pathname.split('/')[2];
 
         async function loadReviews() {
             const token = localStorage.getItem("auth_token");
@@ -84,7 +83,7 @@
 
         function redirectToEditReview(reviewId) {
             localStorage.setItem("current_listing_id", listingId);
-            window.location.href = `/edit-review/${reviewId}/`; // Перенаправляем на страницу редактирования
+            window.location.href = `/edit-review/${reviewId}/`;
             
         }
 
@@ -104,7 +103,7 @@
 
                 if (response.ok) {
                     alert("Review deleted successfully.");
-                    loadReviews();  // Reload reviews
+                    loadReviews();
                 } else {
                     alert("Failed to delete review.");
                     console.error("Error:", await response.text());
@@ -115,7 +114,6 @@
             }
         }
 
-        // Загружаем все отзывы при загрузке страницы
         window.onload = loadReviews;
     </script>
 </body>

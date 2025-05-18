@@ -46,11 +46,9 @@
     </main>
 
     <script>
-        // Получаем ID объявления из URL
         const pathname = window.location.pathname;
-        const listingId = pathname.split('/')[2]; // Предполагаем, что URL выглядит как /listings-edit/<listing_id>/
+        const listingId = pathname.split('/')[2];
 
-        // Загружаем текущие данные объявления для редактирования
         async function loadListingData() {
             const token = localStorage.getItem("auth_token");
             if (!token) {
@@ -82,7 +80,6 @@
             }
         }
 
-        // Отправка изменений на сервер
         async function updateListing() {
             const token = localStorage.getItem("auth_token");
             if (!token) {
@@ -113,7 +110,7 @@
                 if (response.ok) {
                     document.getElementById('response-message').innerText = result.detail;
                     alert("Listing updated successfully.");
-                    window.location.href = `/listings/`; // Перенаправление на список объявлений
+                    window.location.href = `/listings/`;
                 } else {
                     alert(result.error || "Failed to update listing.");
                 }
@@ -123,7 +120,6 @@
             }
         }
 
-        // Загружаем данные объявления при загрузке страницы
         document.addEventListener("DOMContentLoaded", loadListingData);
     </script>
 </body>

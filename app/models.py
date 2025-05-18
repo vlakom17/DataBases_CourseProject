@@ -10,11 +10,9 @@ class users(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     passwordhash = Column(String, nullable=False)
-    usertype = Column(String, nullable=False)  # Например, "admin", "user"
-    
-    # Связь с таблицей admin
+    usertype = Column(String, nullable=False)  # "admin", "user"
+  
     admin = relationship('admin', back_populates='user', uselist=False)  # uselist=False указывает на связь 1:1
-
     listings = relationship('listing', back_populates='user')
     reviews = relationship('review', back_populates='user')
     requests = relationship('purchaserequest', back_populates='user')
@@ -30,7 +28,7 @@ class listing(Base):
     price = Column(BigInteger, nullable=False)
     address = Column(Text, nullable=False)
     area = Column(Float, nullable=False)
-    status = Column(String, nullable=False)  # Например, "available", "sold"
+    status = Column(String, nullable=False)  # "available", "sold"
 
     user = relationship('users', back_populates='listings')
     property_type = relationship('propertytype')
@@ -63,7 +61,7 @@ class purchaserequest(Base):
     listingid = Column(BigInteger, ForeignKey('listing.listingid'), nullable=False)
     userid = Column(BigInteger, ForeignKey('users.userid'), nullable=False)
     requestdate = Column(Date, nullable=False)
-    requeststatus = Column(String, nullable=False)  # Например, "pending", "approved", "rejected"
+    requeststatus = Column(String, nullable=False)  # "pending", "approved", "rejected"
 
     listing = relationship('listing', back_populates='requests')
     user = relationship('users', back_populates='requests')
@@ -72,18 +70,17 @@ class purchaserequest(Base):
 class admin(Base):
     __tablename__ = 'admin'
     adminid = Column(BigInteger, primary_key=True, autoincrement=True)
-    userid = Column(BigInteger, ForeignKey('users.userid'), nullable=False)  # Внешний ключ на users.userid
+    userid = Column(BigInteger, ForeignKey('users.userid'), nullable=False)
     adminname = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
 
-    # Связь с пользователем
-    user = relationship('users', back_populates='admin', uselist=False)  # uselist=False для 1:1 связи
+    user = relationship('users', back_populates='admin', uselist=False)
 
 class actionlog(Base):
     __tablename__ = 'actionlog'
     logid = Column(BigInteger, primary_key=True, autoincrement=True)
     userid = Column(BigInteger, ForeignKey('users.userid'), nullable=True)
-    actiontype = Column(String, nullable=False)  # Например, "create", "update", "delete"
+    actiontype = Column(String, nullable=False)  # "create", "update", "delete"
     actiondescription = Column(Text, nullable=True)
     actiontimestamp = Column(DateTime, nullable=False)
 

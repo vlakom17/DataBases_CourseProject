@@ -34,11 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Обработка формы логина
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (event) => {
-            event.preventDefault(); // Предотвращаем стандартное поведение формы
+            event.preventDefault();
             console.log("Login form submitted!");
 
             const email = document.getElementById('login-email').value;
@@ -55,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const data = await response.json();
                     alert("Login successful! ");
                     localStorage.setItem("auth_token", data.access_token);  // Сохраняем токен в localStorage
-                    window.location.href = '/listings/'; // Перенаправляем на защищенную страницу
+                    window.location.href = '/listings/';
                 }
                 else {
                     const error = await response.json();
@@ -68,17 +67,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Функция для загрузки всех объявлений
     async function loadListings() {
         try {
-            // Получаем токен из localStorage
             const token = localStorage.getItem("auth_token");
 
             if (!token) {
                 alert("You must be logged in to view listings!");
                 return;
             }
-            // Запрос на сервер для получения всех объявлений
             const response = await fetch(`/all-listings/`, {
                 method: 'GET',
                 headers: {
@@ -86,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // Проверяем, что ответ успешен
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -96,12 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let data;
             try {
-                data = JSON.parse(text); // Пробуем распарсить JSON
+                data = JSON.parse(text);
             } catch (e) {
                 throw new Error("Failed to parse JSON: " + e.message);
             }
 
-            // Проверяем, что в ответе есть массив 'listings'
             if (Array.isArray(data.listings)) {
                 const listings = data.listings;
 
@@ -132,21 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
     loadListings();
 
 
-    // Обработчики событий для кнопок "Logout" и "Create Listing"
+    // Обработчики событий для кнопок
     const logoutButton = document.getElementById("logout");
     const createListingButton = document.getElementById("create-listing");
     const confirmButton = document.getElementById("confirm-logout");
     const cancelButton = document.getElementById("cancel-logout");
     const form = document.getElementById("create-listing-form");
 
-    // Переход на страницу подтверждения логаута
     if (logoutButton) {
         logoutButton.addEventListener("click", () => {
             window.location.href = "/logout-confirm/";
         });
     }
 
-    // Переход на страницу создания объявления
     if (createListingButton) {
         createListingButton.addEventListener("click", () => {
             window.location.href = "/listings-create/";
@@ -175,8 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const result = await response.json();
                     document.getElementById("response-message").innerText = 
                         `Listing created successfully: ID ${result.listingid}`;
-                    form.reset(); // Очистка формы
-                    window.location.href = "/listings/"; // Перенаправление на страницу объявлений
+                    form.reset();
+                    window.location.href = "/listings/";
                 } else {
                     const error = await response.json();
                     document.getElementById("response-message").innerText = 
@@ -189,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Подтверждение логаута
     if (confirmButton) {
         confirmButton.addEventListener("click", async () => {
             const token = localStorage.getItem("auth_token");
@@ -211,7 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (response.ok) {
                     alert("You have been logged out.");
-                    localStorage.removeItem("auth_token"); // Удаление токена
+                    localStorage.removeItem("auth_token");
                     window.location.href = "/login/";
                 } else {
                     const data = await response.json();
@@ -224,10 +215,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Отмена логаута
     if (cancelButton) {
         cancelButton.addEventListener("click", () => {
-            window.location.href = "/listings/"; // Возврат на главную страницу
+            window.location.href = "/listings/";
         });
     }
 

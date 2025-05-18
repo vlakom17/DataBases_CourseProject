@@ -43,7 +43,7 @@
             }
 
             try {
-                const response = await fetch(`/reviews/${reviewId}/`, {  // Загрузка данных отзыва
+                const response = await fetch(`/reviews/${reviewId}/`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -90,7 +90,7 @@
                 if (response.ok) {
                     alert("Review updated successfully.");
                     
-                    window.location.href = `/listing-reviews/${listingId}/`;  // Возвращаемся к списку отзывов
+                    window.location.href = `/listing-reviews/${listingId}/`;
                 } else {
                     alert("Failed to update review.");
                     console.error("Error:", await response.text());
@@ -101,7 +101,6 @@
             }
         });
 
-        // Загружаем данные отзыва при загрузке страницы
         window.onload = loadReview;
     </script>
 </body>

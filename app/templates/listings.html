@@ -17,7 +17,7 @@
     </header>
     <main>
         <div id="listing-container">
-            <!-- Объявления будут добавляться сюда динамически через JavaScript -->
+
         </div>
     </main>
     <footer>
@@ -26,9 +26,9 @@
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script>
-        // Асинхронная функция для выполнения запроса
+
         async function setUpdateUserButton() {
-            const token = localStorage.getItem("auth_token"); // Получаем токен
+            const token = localStorage.getItem("auth_token"); 
     
             if (!token) {
                 alert("User not authenticated!");
@@ -46,7 +46,7 @@
     
                 if (response.ok) {
                     const userData = await response.json();
-                    const userId = userData.userid; // ID текущего пользователя
+                    const userId = userData.userid;
                     const updateUserButton = document.getElementById('update-user');
                     updateUserButton.onclick = () => {
                         window.location.href = `/update-user/${userId}`;
@@ -62,7 +62,6 @@
             }
         }
     
-        // Вызов функции после загрузки страницы
         document.addEventListener("DOMContentLoaded", setUpdateUserButton);
     </script>
     
